@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>水面の揺らぎエフェクト</title>
+    <title>心拍同期水面揺らぎシステム</title>
     <style>
         body {
             margin: 0;
@@ -20,14 +20,15 @@
             position: absolute;
             top: 10px;
             right: 10px;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.8);
             color: white;
-            padding: 15px;
+            padding: 20px;
             border-radius: 5px;
             font-size: 14px;
+            min-width: 320px; /* 少し幅を広げています */
         }
         #controls h3 {
-            margin: 0 0 10px 0;
+            margin: 0 0 15px 0;
             font-size: 16px;
         }
         .control-group {
@@ -38,21 +39,84 @@
             width: 140px;
             font-size: 12px;
         }
-        .control-group input {
-            width: 100px;
+        .control-group input[type="range"] {
+            width: 120px;
             margin-right: 5px;
+            vertical-align: middle;
         }
         .control-group span {
             font-size: 12px;
             width: 40px;
             display: inline-block;
+            vertical-align: middle;
+        }
+        .heart-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+        }
+        .heart-rate {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ff6b6b;
+            margin: 5px 0;
+        }
+        .target-rate {
+            color: #4ecdc4;
+            font-size: 18px;
+        }
+        .status {
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        #startButton {
+            background: #4ecdc4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        #startButton:hover {
+            background: #3db5ad;
+        }
+        #startButton:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .reference {
+            font-size: 10px;
+            color: #888;
+            margin-top: 15px;
+            line-height: 1.4;
         }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
     <div id="controls">
-        <h3>水面パラメータ</h3>
+        <h3>心拍同期水面システム</h3>
+        
+        <div class="heart-info">
+            <div>現在の心拍数:</div>
+            <div class="heart-rate" id="currentBPM">--</div>
+            <div class="target-rate">目標心拍数: <span id="targetBPM">65</span> BPM</div>
+            <div class="status" id="status">心拍検出を開始してください</div>
+        </div>
+        
+        <button id="startButton">心拍検出を開始</button>
+        
+        <h3 style="margin-top: 20px;">音声パラメータ</h3>
+        <div class="control-group">
+            <label>マイクゲイン:</label>
+            <input type="range" id="micGainSlider" min="0" max="30" value="0" step="1" disabled>
+            <span id="micGainValue">0 dB</span>
+        </div>
+        <h3 style="margin-top: 20px;">視覚パラメータ</h3>
         <div class="control-group">
             <label>基本色 (R):</label>
             <input type="range" id="baseColorR" min="0" max="255" value="0">
@@ -60,38 +124,13 @@
         </div>
         <div class="control-group">
             <label>基本色 (G):</label>
-            <input type="range" id="baseColorG" min="0" max="255" value="150">
-            <span id="baseColorGValue">150</span>
+            <input type="range" id="baseColorG" min="0" max="255" value="120">
+            <span id="baseColorGValue">120</span>
         </div>
         <div class="control-group">
             <label>基本色 (B):</label>
-            <input type="range" id="baseColorB" min="0" max="255" value="200">
-            <span id="baseColorBValue">200</span>
-        </div>
-        <div class="control-group">
-            <label>光の色 (R):</label>
-            <input type="range" id="lightColorR" min="0" max="255" value="150">
-            <span id="lightColorRValue">150</span>
-        </div>
-        <div class="control-group">
-            <label>光の色 (G):</label>
-            <input type="range" id="lightColorG" min="0" max="255" value="255">
-            <span id="lightColorGValue">255</span>
-        </div>
-        <div class="control-group">
-            <label>光の色 (B):</label>
-            <input type="range" id="lightColorB" min="0" max="255" value="255">
-            <span id="lightColorBValue">255</span>
-        </div>
-        <div class="control-group">
-            <label>波の細かさ:</label>
-            <input type="range" id="waveScale" min="0.5" max="10" value="3" step="0.1">
-            <span id="waveScaleValue">3</span>
-        </div>
-        <div class="control-group">
-            <label>揺らぎの速度:</label>
-            <input type="range" id="waveSpeed" min="0" max="2" value="0.5" step="0.05">
-            <span id="waveSpeedValue">0.5</span>
+            <input type="range" id="baseColorB" min="0" max="255" value="180">
+            <span id="baseColorBValue">180</span>
         </div>
         <div class="control-group">
             <label>光の強度:</label>
@@ -99,18 +138,21 @@
             <span id="lightIntensityValue">1</span>
         </div>
         <div class="control-group">
-            <label>歪みの強さ:</label>
-            <input type="range" id="distortion" min="0" max="0.5" value="0.15" step="0.01">
-            <span id="distortionValue">0.15</span>
+            <label>ペーシング強度:</label>
+            <input type="range" id="pacingIntensity" min="0" max="1" value="0.5" step="0.05">
+            <span id="pacingIntensityValue">0.5</span>
         </div>
-        <div class="control-group">
-            <label>コントラスト:</label>
-            <input type="range" id="contrast" min="0.5" max="3" value="1.5" step="0.1">
-            <span id="contrastValue">1.5</span>
+        
+        <div class="reference">
+            参考文献:<br>
+            • Pan & Tompkins (1985) "A Real-Time QRS Detection Algorithm"<br>
+            • Lehrer et al. (2000) "Resonant Frequency Biofeedback"<br>
+            • Vaschillo et al. (2006) "Heart Rate Variability Biofeedback"
         </div>
     </div>
 
     <script>
+        // WebGL設定
         const canvas = document.getElementById('canvas');
         const gl = canvas.getContext('webgl');
 
@@ -118,6 +160,7 @@
             alert('WebGLがサポートされていません');
         }
 
+        // キャンバスサイズの設定
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -126,6 +169,7 @@
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
 
+        // 頂点シェーダー
         const vertexShaderSource = `
             attribute vec2 a_position;
             varying vec2 v_texCoord;
@@ -136,6 +180,7 @@
             }
         `;
 
+        // フラグメントシェーダー
         const fragmentShaderSource = `
             precision highp float;
             
@@ -148,6 +193,7 @@
             uniform float u_lightIntensity;
             uniform float u_distortion;
             uniform float u_contrast;
+            uniform float u_heartPhase;
             
             varying vec2 v_texCoord;
             
@@ -167,7 +213,7 @@
             float snoise(vec2 v) {
                 const vec4 C = vec4(0.211324865405187,
                                     0.366025403784439,
-                                    -0.577350269189626,
+                                   -0.577350269189626,
                                     0.024390243902439);
                 vec2 i  = floor(v + dot(v, C.yy));
                 vec2 x0 = v -   i + dot(i, C.xx);
@@ -198,9 +244,14 @@
                 g.yz = a0.yz * x12.xz + h.yz * x12.yw;
                 return 130.0 * dot(m, g);
             }
-                        float waterCaustics(vec2 uv, float time) {
+            
+            // 水面の揺らぎを計算
+            float waterCaustics(vec2 uv, float time) {
                 vec2 p = uv * u_waveScale;
-                float t = time * u_waveSpeed;
+                
+                // 心拍に同期した波の速度変調
+                float heartModulation = sin(u_heartPhase) * 0.3 + 1.0;
+                float t = time * u_waveSpeed * heartModulation;
                 
                 // 複数のノイズを重ね合わせて複雑な波を作成
                 float n1 = snoise(p + vec2(t * 0.7, t * 0.5));
@@ -211,12 +262,15 @@
                 // ノイズを組み合わせ
                 float noise = n1 * 0.4 + n2 * 0.3 + n3 * 0.2 + n4 * 0.1;
                 
-                vec2 distortedUV = uv + noise * u_distortion;
+                // 歪みを適用（心拍で変調）
+                vec2 distortedUV = uv + noise * u_distortion * heartModulation;
                 
+                // コースティクスパターンを生成
                 float pattern1 = sin(distortedUV.x * 30.0 + noise * 5.0 + t * 2.0);
                 float pattern2 = sin(distortedUV.y * 25.0 + noise * 4.0 - t * 1.8);
                 float pattern3 = sin((distortedUV.x + distortedUV.y) * 20.0 + noise * 3.0 + t * 1.5);
                 
+                // パターンを組み合わせて光の筋を作成
                 float caustics = pattern1 * pattern2 * 0.5 + pattern3 * 0.5;
                 caustics = pow(abs(caustics), u_contrast);
                 
@@ -234,8 +288,9 @@
                 float ripples = waterCaustics(uv * 3.0, time * 1.5) * 0.3;
                 caustics += ripples;
                 
-                // 光の強度を調整
-                caustics *= u_lightIntensity;
+                // 光の強度を調整（心拍で脈動）
+                float heartPulse = sin(u_heartPhase) * 0.2 + 1.0;
+                caustics *= u_lightIntensity * heartPulse;
                 
                 // 基本色と光の色を混合
                 vec3 color = u_baseColor + u_lightColor * caustics;
@@ -243,10 +298,13 @@
                 // 水深による色の変化をシミュレート
                 float depth = 1.0 - uv.y * 0.3;
                 color *= depth;
+                
+                // 最終的な色を出力
                 gl_FragColor = vec4(color, 1.0);
             }
         `;
 
+        // シェーダーのコンパイル関数
         function createShader(gl, type, source) {
             const shader = gl.createShader(type);
             gl.shaderSource(shader, source);
@@ -261,6 +319,7 @@
             return shader;
         }
 
+        // シェーダープログラムの作成
         const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
         const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
 
@@ -273,7 +332,7 @@
             console.error('プログラムのリンクエラー:', gl.getProgramInfoLog(program));
         }
 
-
+        // 頂点データ
         const vertices = new Float32Array([
             -1, -1,
              1, -1,
@@ -285,6 +344,7 @@
         gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
 
+        // ユニフォームの場所を取得
         const positionLocation = gl.getAttribLocation(program, 'a_position');
         const timeLocation = gl.getUniformLocation(program, 'u_time');
         const resolutionLocation = gl.getUniformLocation(program, 'u_resolution');
@@ -295,17 +355,304 @@
         const lightIntensityLocation = gl.getUniformLocation(program, 'u_lightIntensity');
         const distortionLocation = gl.getUniformLocation(program, 'u_distortion');
         const contrastLocation = gl.getUniformLocation(program, 'u_contrast');
+        const heartPhaseLocation = gl.getUniformLocation(program, 'u_heartPhase');
 
+        // パラメータ
         let params = {
-            baseColor: [0, 150/255, 200/255],
+            baseColor: [0, 120/255, 180/255],
             lightColor: [150/255, 255/255, 255/255],
             waveScale: 3,
             waveSpeed: 0.5,
             lightIntensity: 1,
             distortion: 0.15,
-            contrast: 1.5
+            contrast: 1.5,
+            heartPhase: 0,
+            pacingIntensity: 0.5
         };
 
+        // 心拍検出システム
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let scriptProcessor = null;
+        let gainNode = null; // ### 追加 ### ゲインノード用の変数を追加
+        let isDetecting = false;
+        
+        // 心拍関連変数
+        let currentBPM = 0;
+        let targetBPM = 65;
+        let heartPhase = 0;
+        let lastBeatTime = 0;
+        let beatIntervals = [];
+        let peakBuffer = [];
+        let movingAverage = [];
+        const BUFFER_SIZE = 2048;
+        const SAMPLE_RATE = 44100;
+
+        // Pan-Tompkins法の実装
+        class PanTompkinsDetector {
+            constructor(sampleRate) {
+                this.sampleRate = sampleRate;
+                this.bufferSize = 200; // 200msのバッファ
+                this.threshold = 0.3;
+                this.refractory = 200; // 200ms不応期
+                this.lastPeak = 0;
+                
+                // フィルタ係数
+                this.lpCoeffs = this.butterworth(5, 15 / (sampleRate / 2));
+                this.hpCoeffs = this.butterworth(5, 5 / (sampleRate / 2));
+                
+                this.resetBuffers();
+            }
+            
+            resetBuffers() {
+                this.filtered = [];
+                this.derivative = [];
+                this.squared = [];
+                this.integrated = [];
+                this.peaks = [];
+            }
+            
+            butterworth(order, cutoff) {
+                // 簡易バターワースフィルタ係数
+                return { a: [1, -0.5], b: [0.5, 0.5] };
+            }
+            
+            process(data) {
+                // バンドパスフィルタ (5-15 Hz)
+                let filtered = this.bandpassFilter(data);
+                
+                // 微分
+                let derivative = this.differentiate(filtered);
+                
+                // 二乗
+                let squared = derivative.map(x => x * x);
+                
+                // 移動窓積分
+                let integrated = this.movingWindowIntegration(squared, 30);
+                
+                // ピーク検出
+                let peaks = this.findPeaks(integrated);
+                
+                return peaks;
+            }
+            
+            bandpassFilter(data) {
+                // 簡易フィルタ実装
+                let filtered = [...data];
+                for (let i = 1; i < filtered.length; i++) {
+                    filtered[i] = filtered[i] * 0.5 + filtered[i-1] * 0.5;
+                }
+                return filtered;
+            }
+            
+            differentiate(data) {
+                let diff = [];
+                for (let i = 1; i < data.length; i++) {
+                    diff.push(data[i] - data[i-1]);
+                }
+                return diff;
+            }
+            
+            movingWindowIntegration(data, windowSize) {
+                let integrated = [];
+                for (let i = 0; i < data.length; i++) {
+                    let sum = 0;
+                    let count = 0;
+                    for (let j = Math.max(0, i - windowSize); j <= i; j++) {
+                        sum += data[j];
+                        count++;
+                    }
+                    integrated.push(sum / count);
+                }
+                return integrated;
+            }
+            
+            findPeaks(data) {
+                let peaks = [];
+                let threshold = Math.max(...data) * this.threshold;
+                
+                for (let i = 1; i < data.length - 1; i++) {
+                    if (data[i] > threshold && 
+                        data[i] > data[i-1] && 
+                        data[i] > data[i+1]) {
+                        
+                        let currentTime = Date.now();
+                        if (currentTime - this.lastPeak > this.refractory) {
+                            peaks.push({
+                                index: i,
+                                time: currentTime,
+                                value: data[i]
+                            });
+                            this.lastPeak = currentTime;
+                        }
+                    }
+                }
+                
+                return peaks;
+            }
+        }
+
+        const detector = new PanTompkinsDetector(SAMPLE_RATE);
+
+        // 心拍検出開始
+        async function startHeartDetection() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                microphone = audioContext.createMediaStreamSource(stream);
+                
+                // ### ここから変更 ###
+                gainNode = audioContext.createGain();
+                // ### ここまで変更 ###
+
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = BUFFER_SIZE;
+                
+                scriptProcessor = audioContext.createScriptProcessor(BUFFER_SIZE, 1, 1);
+                
+                // ### ここから変更 ###
+                // 接続を microphone -> gainNode -> analyser に変更
+                microphone.connect(gainNode);
+                gainNode.connect(analyser);
+                analyser.connect(scriptProcessor);
+                scriptProcessor.connect(audioContext.destination);
+                // ### ここまで変更 ###
+                
+                scriptProcessor.onaudioprocess = processAudio;
+                
+                isDetecting = true;
+                document.getElementById('startButton').textContent = '検出を停止';
+                document.getElementById('status').textContent = '心拍を検出中...';
+                
+                // ### 追加 ### ゲインスライダーを有効化
+                document.getElementById('micGainSlider').disabled = false;
+                
+            } catch (error) {
+                console.error('マイクアクセスエラー:', error);
+                document.getElementById('status').textContent = 'マイクアクセスに失敗しました';
+            }
+        }
+
+        // 音声処理
+        function processAudio(event) {
+            const inputData = event.inputBuffer.getChannelData(0);
+            
+            // Pan-Tompkins法でピーク検出
+            const peaks = detector.process(inputData);
+            
+            if (peaks.length > 0) {
+                // 心拍間隔を計算
+                for (let peak of peaks) {
+                    if (lastBeatTime > 0) {
+                        const interval = peak.time - lastBeatTime;
+                        if (interval > 300 && interval < 2000) { // 30-200 BPM
+                            beatIntervals.push(interval);
+                            if (beatIntervals.length > 10) {
+                                beatIntervals.shift();
+                            }
+                        }
+                    }
+                    lastBeatTime = peak.time;
+                }
+                
+                // BPM計算
+                if (beatIntervals.length >= 3) {
+                    const avgInterval = beatIntervals.reduce((a, b) => a + b) / beatIntervals.length;
+                    currentBPM = Math.round(60000 / avgInterval);
+                    document.getElementById('currentBPM').textContent = currentBPM;
+                    
+                    // ペーシング計算
+                    updatePacing();
+                }
+            }
+        }
+
+        // ペーシング更新
+        function updatePacing() {
+            const bpmDiff = targetBPM - currentBPM;
+            const pacingStrength = params.pacingIntensity;
+            
+            // 徐々に目標心拍数に近づける
+            if (Math.abs(bpmDiff) > 5) {
+                // 波の速度を調整してペーシング
+                const adjustment = bpmDiff * 0.001 * pacingStrength;
+                params.waveSpeed = Math.max(0.1, Math.min(2.0, params.waveSpeed + adjustment));
+                
+                // ステータス更新
+                let status = '';
+                if (bpmDiff > 0) {
+                    status = 'リラックスを促しています...';
+                } else {
+                    status = '活性化を促しています...';
+                }
+                document.getElementById('status').textContent = status;
+            } else {
+                document.getElementById('status').textContent = '目標心拍数に到達しました';
+            }
+        }
+
+        // 心拍検出停止
+        function stopHeartDetection() {
+            if (scriptProcessor) {
+                scriptProcessor.disconnect();
+                scriptProcessor = null;
+            }
+            // ### ここから変更 ###
+            if (analyser) {
+                analyser.disconnect();
+                analyser = null;
+            }
+            if (gainNode) {
+                gainNode.disconnect();
+                gainNode = null;
+            }
+            // ### ここまで変更 ###
+            if (microphone) {
+                microphone.disconnect();
+                microphone = null;
+            }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            
+            isDetecting = false;
+            document.getElementById('startButton').textContent = '心拍検出を開始';
+            document.getElementById('status').textContent = 'マイクを起動してください';
+
+            // ### 追加 ### UIをリセット
+            const micGainSlider = document.getElementById('micGainSlider');
+            micGainSlider.disabled = true;
+            micGainSlider.value = 0;
+            document.getElementById('micGainValue').textContent = '0 dB';
+        }
+
+        // イベントリスナー
+        document.getElementById('startButton').addEventListener('click', function() {
+            if (!isDetecting) {
+                startHeartDetection();
+            } else {
+                stopHeartDetection();
+            }
+        });
+
+        // ### ここから追加 ### ゲインスライダーのイベントリスナー
+        document.getElementById('micGainSlider').addEventListener('input', function() {
+            if (!gainNode) return;
+
+            const dbValue = parseFloat(this.value);
+            // デシベル(dB)を線形値に変換
+            const linearValue = Math.pow(10, dbValue / 20);
+            
+            gainNode.gain.value = linearValue;
+            
+            document.getElementById('micGainValue').textContent = `${dbValue.toFixed(0)} dB`;
+        });
+        // ### ここまで追加 ###
+
+        // コントロール更新
         function updateParam(param, index, value) {
             if (index !== undefined) {
                 params[param][index] = value / 255;
@@ -314,6 +661,7 @@
             }
         }
 
+        // UIイベントリスナー
         document.getElementById('baseColorR').addEventListener('input', function() {
             updateParam('baseColor', 0, this.value);
             document.getElementById('baseColorRValue').textContent = this.value;
@@ -329,54 +677,31 @@
             document.getElementById('baseColorBValue').textContent = this.value;
         });
         
-        document.getElementById('lightColorR').addEventListener('input', function() {
-            updateParam('lightColor', 0, this.value);
-            document.getElementById('lightColorRValue').textContent = this.value;
-        });
-        
-        document.getElementById('lightColorG').addEventListener('input', function() {
-            updateParam('lightColor', 1, this.value);
-            document.getElementById('lightColorGValue').textContent = this.value;
-        });
-        
-        document.getElementById('lightColorB').addEventListener('input', function() {
-            updateParam('lightColor', 2, this.value);
-            document.getElementById('lightColorBValue').textContent = this.value;
-        });
-        
-        document.getElementById('waveScale').addEventListener('input', function() {
-            updateParam('waveScale', undefined, this.value);
-            document.getElementById('waveScaleValue').textContent = this.value;
-        });
-        
-        document.getElementById('waveSpeed').addEventListener('input', function() {
-            updateParam('waveSpeed', undefined, this.value);
-            document.getElementById('waveSpeedValue').textContent = this.value;
-        });
-        
         document.getElementById('lightIntensity').addEventListener('input', function() {
             updateParam('lightIntensity', undefined, this.value);
             document.getElementById('lightIntensityValue').textContent = this.value;
         });
         
-        document.getElementById('distortion').addEventListener('input', function() {
-            updateParam('distortion', undefined, this.value);
-            document.getElementById('distortionValue').textContent = this.value;
-        });
-        
-        document.getElementById('contrast').addEventListener('input', function() {
-            updateParam('contrast', undefined, this.value);
-            document.getElementById('contrastValue').textContent = this.value;
+        document.getElementById('pacingIntensity').addEventListener('input', function() {
+            updateParam('pacingIntensity', undefined, this.value);
+            document.getElementById('pacingIntensityValue').textContent = this.value;
         });
 
-
+        // アニメーションループ
         let startTime = Date.now();
         
         function render() {
             const currentTime = (Date.now() - startTime) * 0.001;
             
+            // 心拍位相の更新
+            if (currentBPM > 0) {
+                const beatPeriod = 60 / currentBPM;
+                heartPhase += (2 * Math.PI) / (beatPeriod * 60); // 60fps想定
+            }
+            
             gl.useProgram(program);
             
+            // ユニフォームの設定
             gl.uniform1f(timeLocation, currentTime);
             gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
             gl.uniform3fv(baseColorLocation, params.baseColor);
@@ -386,9 +711,14 @@
             gl.uniform1f(lightIntensityLocation, params.lightIntensity);
             gl.uniform1f(distortionLocation, params.distortion);
             gl.uniform1f(contrastLocation, params.contrast);
+            gl.uniform1f(heartPhaseLocation, heartPhase);
+            
+            // 頂点属性の設定
             gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
             gl.enableVertexAttribArray(positionLocation);
             gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+            
+            // 描画
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
             
             requestAnimationFrame(render);
